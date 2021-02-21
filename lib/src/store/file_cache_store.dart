@@ -11,7 +11,7 @@ import 'cache_store.dart';
 
 /// A store saving responses in a dedicated file from a given root [directory].
 ///
-class FileCacheStore extends CacheStore {
+class FileCacheStore implements CacheStore {
   final Map<CachePriority, Directory> _directories;
 
   FileCacheStore(Directory directory)
@@ -84,7 +84,8 @@ class FileCacheStore extends CacheStore {
 
     // Purge entry if stalled
     final maxStale = resp.maxStale;
-    if (DateTime.now().toUtc().isAfter(maxStale)) {
+    if (DateTime.now().toUtc().isAfter(maxStale!)) {
+      // print(maxStale.millisecond);
       await delete(key);
       return null;
     }
@@ -112,20 +113,22 @@ class FileCacheStore extends CacheStore {
   }
 
   List<int> _serializeContent(CacheResponse response) {
-    final etag = utf8.encode(response.eTag);
-    final lastModified = utf8.encode(response.lastModified);
+    final etag = utf8.encode(response.eTag ?? '');
+    final lastModified = utf8.encode(response.lastModified.toIso8601String());
     final maxStale = utf8.encode(response.getMaxStaleSeconds().toString());
     final url = utf8.encode(response.url);
     final cacheControl = utf8.encode(response.cacheControl.toHeader());
-    final date = utf8.encode(response.date.toIso8601String());
-    final expires = utf8.encode(response.expires.toIso8601String());
+    final date = utf8
+        .encode(response.date != null ? response.date!.toIso8601String() : '');
+    final expires = utf8.encode(
+        response.expires != null ? response.expires!.toIso8601String() : '');
     final responseDate = utf8.encode(response.responseDate.toIso8601String());
 
     return [
       ...Int32List.fromList([
-        response.content.length,
+        response.content != null ? response.content!.length : 0,
         etag.length,
-        response.headers.length,
+        response.headers != null ? response.headers!.length : 0,
         lastModified.length,
         maxStale.length,
         url.length,
@@ -134,9 +137,9 @@ class FileCacheStore extends CacheStore {
         expires.length,
         responseDate.length,
       ]).buffer.asInt8List(),
-      ...response.content,
+      ...response.content ?? [],
       ...etag,
-      ...response.headers,
+      ...response.headers ?? [],
       ...lastModified,
       ...maxStale,
       ...url,
@@ -161,7 +164,7 @@ class FileCacheStore extends CacheStore {
 
     var size = sizes[fieldIndex++];
     final content =
-        size != 0 ? data.skip(i).take(size).toList() : [] as List<int>;
+        Uint8List.fromList(size != 0 ? data.skip(i).take(size).toList() : []);
 
     i += size;
     size = sizes[fieldIndex++];
@@ -170,7 +173,7 @@ class FileCacheStore extends CacheStore {
     i += size;
     size = sizes[fieldIndex++];
     final headers =
-        size != 0 ? data.skip(i).take(size).toList() : [] as List<int>;
+        Uint8List.fromList(size != 0 ? data.skip(i).take(size).toList() : []);
 
     i += size;
     size = sizes[fieldIndex++];
@@ -205,24 +208,27 @@ class FileCacheStore extends CacheStore {
     final responseDate =
         size != 0 ? utf8.decode(data.skip(i).take(size).toList()) : '';
 
-    return CacheResponse(
+    var cache = CacheResponse(
       cacheControl: CacheControl.fromHeader(cacheControl.split(', ')),
       content: content,
-      date: DateTime.tryParse(date) ?? DateTime.now(),
+      date: DateTime.tryParse(date) ?? DateTime.now().toUtc(),
       eTag: etag,
-      expires: DateTime.tryParse(expires) ?? DateTime.now(),
+      expires: DateTime.tryParse(expires) ?? DateTime.now().toUtc(),
       headers: headers,
       key: path.basename(file.path),
-      lastModified: lastModified,
+      lastModified: DateTime.tryParse(lastModified) ?? DateTime.now().toUtc(),
       maxStale: maxStale != null
           ? DateTime.fromMillisecondsSinceEpoch(
-              int.tryParse(maxStale) ?? DateTime.now().millisecond,
+              int.tryParse(maxStale * 1000) ??
+                  DateTime.now().millisecondsSinceEpoch * 1000,
               isUtc: true)
-          : DateTime.now(),
+          : DateTime.now().toUtc(),
       priority: _getPriority(file),
-      responseDate: DateTime.tryParse(responseDate) ?? DateTime.now(),
+      responseDate: DateTime.tryParse(responseDate) ?? DateTime.now().toUtc(),
       url: url,
     );
+    print(cache.maxStale);
+    return cache;
   }
 
   CachePriority _getPriority(File file) {
@@ -244,7 +250,7 @@ class FileCacheStore extends CacheStore {
     if (file.existsSync()) {
       if (staleOnly) {
         final resp = await _deserializeContent(file);
-        if (DateTime.now().toUtc().isBefore(resp.maxStale)) {
+        if (DateTime.now().toUtc().isBefore(resp.maxStale!)) {
           return Future.value();
         }
       }

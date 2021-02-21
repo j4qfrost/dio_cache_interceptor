@@ -9,7 +9,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   db.main();
-  file.main();
   mem.main();
   backup.main();
+  file.main();
 }

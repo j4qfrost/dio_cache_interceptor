@@ -1,18 +1,26 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio_cache_interceptor/src/util/http_date.dart';
 import 'package:dio_cache_interceptor/src/model/cache_control.dart';
-
+import 'package:moor/moor.dart';
 import './model/cache_response.dart';
 import './store/cache_store.dart';
-import 'content_serialization.dart';
+import 'util/content_serialization.dart';
 import 'model/cache_options.dart';
 import 'store/db_cache_store.dart';
 
 /// Cache interceptor
 class DioCacheInterceptor extends Interceptor {
   static const String _getMethodName = 'GET';
+
+  static const _cacheControlHeader = 'cache-control';
+  static const _dateHeader = 'date';
+  static const _etagHeader = 'etag';
+  static const _expiresHeader = 'expires';
+  static const _ifModifiedSinceHeader = 'if-modified-since';
+  static const _ifNoneMatchHeader = 'if-none-match';
+  static const _lastModifiedHeader = 'last-modified';
 
   final CacheOptions _options;
   final CacheStore _store;
@@ -51,7 +59,7 @@ class DioCacheInterceptor extends Interceptor {
     }
 
     // Don't cache response
-    if (response.statusCode != HttpStatus.ok) {
+    if (response.statusCode != 200) {
       return super.onResponse(response);
     }
 
@@ -83,7 +91,7 @@ class DioCacheInterceptor extends Interceptor {
     }
 
     // Retrieve response from cache
-    if (err.response!.statusCode == HttpStatus.notModified) {
+    if (err.response!.statusCode == 304) {
       return _getResponse(err.request!);
     }
 
@@ -100,16 +108,16 @@ class DioCacheInterceptor extends Interceptor {
   }
 
   void _addCacheDirectives(RequestOptions request, CacheResponse response) {
-    request.headers[HttpHeaders.ifNoneMatchHeader] = response.eTag;
-    request.headers[HttpHeaders.ifModifiedSinceHeader] = response.lastModified;
+    request.headers[_ifNoneMatchHeader] = response.eTag;
+    request.headers[_ifNoneMatchHeader] = response.lastModified;
   }
 
   bool _hasCacheDirectives(Response response) {
-    var result = response.headers[HttpHeaders.etagHeader] != null;
-    result |= response.headers[HttpHeaders.lastModifiedHeader] != null;
+    var result = response.headers[_etagHeader] != null;
+    result |= response.headers[_lastModifiedHeader] != null;
 
     final cacheControl = CacheControl.fromHeader(
-      response.headers[HttpHeaders.cacheControlHeader]!,
+      response.headers[_cacheControlHeader]!,
     );
 
     result &= !(cacheControl.noStore);
@@ -162,11 +170,11 @@ class DioCacheInterceptor extends Interceptor {
       utf8.encode(jsonEncode(response.headers.map)),
     );
 
-    final httpDate = response.headers[HttpHeaders.dateHeader]?.first;
+    final httpDate = response.headers[_dateHeader]?.first;
     final date =
         (httpDate != null) ? HttpDate.parse(httpDate) : DateTime.now().toUtc();
 
-    final httpExpiresDate = response.headers[HttpHeaders.expiresHeader]?.first;
+    final httpExpiresDate = response.headers[_expiresHeader]?.first;
     var expiresDate;
     if (httpExpiresDate != null) {
       try {
@@ -179,22 +187,22 @@ class DioCacheInterceptor extends Interceptor {
 
     return CacheResponse(
       cacheControl: CacheControl.fromHeader(
-        response.headers[HttpHeaders.cacheControlHeader]!,
+        response.headers[_cacheControlHeader]!,
       ),
       content: content,
       date: date,
-      eTag: response.headers[HttpHeaders.etagHeader] != null
-          ? response.headers[HttpHeaders.etagHeader]!.first
+      eTag: response.headers[_etagHeader] != null
+          ? response.headers[_etagHeader]!.first
           : '',
       expires: expiresDate,
       headers: headers,
       key: key,
-      lastModified: response.headers[HttpHeaders.lastModifiedHeader] != null
-          ? response.headers[HttpHeaders.lastModifiedHeader]!.first
-          : '',
+      lastModified: response.headers[_lastModifiedHeader] != null
+          ? DateTime.parse(response.headers[_lastModifiedHeader]!.first)
+          : DateTime.now().toUtc(),
       maxStale: options.maxStale != null
           ? DateTime.now().toUtc().add(options.maxStale!)
-          : DateTime.now(),
+          : DateTime.now().toUtc(),
       priority: options.priority,
       responseDate: DateTime.now().toUtc(),
       url: response.request!.uri.toString(),
@@ -207,8 +215,8 @@ class DioCacheInterceptor extends Interceptor {
     final result = await _getCacheStore(cacheOpts).get(cacheKey);
 
     if (result != null) {
-      result.content = await _decryptContent(cacheOpts, result.content);
-      result.headers = await _decryptContent(cacheOpts, result.headers);
+      result.content = await _decryptContent(cacheOpts, result.content!);
+      result.headers = await _decryptContent(cacheOpts, result.headers!);
     }
 
     return result;
@@ -219,11 +227,11 @@ class DioCacheInterceptor extends Interceptor {
     return existing!.toResponse(request);
   }
 
-  Future<List<int>> _decryptContent(CacheOptions options, List<int> bytes) {
+  Future<Uint8List> _decryptContent(CacheOptions options, List<int> bytes) {
     return options.cipher!.decrypt(bytes);
   }
 
-  Future<List<int>> _encryptContent(CacheOptions options, List<int> bytes) {
+  Future<Uint8List> _encryptContent(CacheOptions options, List<int> bytes) {
     return options.cipher!.encrypt(bytes);
   }
 }

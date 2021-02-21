@@ -1,4 +1,6 @@
+import 'package:moor/moor.dart';
+
 abstract class Cipher {
-  Future<List<int>> encrypt(List<int> bytes);
-  Future<List<int>> decrypt(List<int> bytes);
+  Future<Uint8List> encrypt(List<int> bytes);
+  Future<Uint8List> decrypt(List<int> bytes);
 }

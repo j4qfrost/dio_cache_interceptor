@@ -5,6 +5,8 @@ import './common_store_test.dart' as common;
 void main() {
   common.testGroup(
     'Common Backup store tests',
-    BackupCacheStore(primary: MemCacheStore(), secondary: DbCacheStore()),
+    BackupCacheStore(
+        primary: MemCacheStore(),
+        secondary: DbCacheStore(databaseName: 'backup')),
   );
 }

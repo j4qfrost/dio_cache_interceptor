@@ -2,7 +2,7 @@ import '../../dio_cache_interceptor.dart';
 
 /// A store saving responses in a dedicated memory LRU map.
 ///
-class MemCacheStore extends CacheStore {
+class MemCacheStore implements CacheStore {
   final _LruMap _cache;
 
   /// [maxSize]: Total allowed size in bytes (7MB by default)
@@ -26,7 +26,7 @@ class MemCacheStore extends CacheStore {
     _cache.entries.forEach((key, resp) {
       var shouldRemove = resp.value.priority.index <= priorityOrBelow.index;
       if (staleOnly) {
-        shouldRemove &= DateTime.now().toUtc().isAfter(resp.value.maxStale);
+        shouldRemove &= DateTime.now().toUtc().isAfter(resp.value.maxStale!);
       }
 
       if (shouldRemove) {
@@ -45,7 +45,7 @@ class MemCacheStore extends CacheStore {
     if (resp == null) return Future.value();
     final maxStale = resp.value.maxStale;
 
-    if (staleOnly && DateTime.now().toUtc().isBefore(maxStale)) {
+    if (staleOnly && DateTime.now().toUtc().isBefore(maxStale!)) {
       return Future.value();
     }
 
@@ -66,7 +66,7 @@ class MemCacheStore extends CacheStore {
 
     // Purge entry if stalled
     final maxStale = resp.maxStale;
-    if (DateTime.now().toUtc().isAfter(maxStale)) {
+    if (DateTime.now().toUtc().isAfter(maxStale!)) {
       await delete(key);
       return null;
     }
@@ -164,8 +164,8 @@ class _LruMap {
   }
 
   int _computeSize(CacheResponse resp) {
-    var size = resp.content.length;
-    size += resp.headers.length;
+    var size = resp.content != null ? resp.content!.length : 0;
+    size += resp.headers != null ? resp.headers!.length : 0;
 
     return size * 8;
   }

@@ -1,10 +1,10 @@
 import 'dart:convert' show jsonDecode, utf8;
-import 'dart:io' show HttpStatus;
 
 import 'package:dio/dio.dart';
 import 'package:dio_cache_interceptor/src/model/cache_control.dart';
+import 'package:moor/moor.dart';
 
-import '../content_serialization.dart';
+import '../util/content_serialization.dart';
 import 'cache_priority.dart';
 
 /// Response representation from cache store.
@@ -19,28 +19,28 @@ class CacheResponse {
   final CacheControl cacheControl;
 
   /// Response body
-  List<int> content;
+  Uint8List? content;
 
   /// Response Date header
-  final DateTime date;
+  final DateTime? date;
 
   /// ETag header
-  final String eTag;
+  final String? eTag;
 
   /// Expires header
-  final DateTime expires;
+  final DateTime? expires;
 
   /// Response headers
-  List<int> headers;
+  Uint8List? headers;
 
   /// Key used by store
   final String key;
 
   /// Last-modified header
-  final String lastModified;
+  final DateTime lastModified;
 
   /// Max stale expiry
-  final DateTime maxStale;
+  final DateTime? maxStale;
 
   /// Cache priority
   final CachePriority priority;
@@ -53,14 +53,14 @@ class CacheResponse {
 
   CacheResponse({
     required this.cacheControl,
-    required this.content,
-    required this.date,
-    required this.eTag,
-    required this.expires,
-    this.headers = const [],
+    this.content,
+    this.date,
+    this.eTag,
+    this.expires,
+    this.headers,
     required this.key,
-    this.lastModified = '',
-    required this.maxStale,
+    required this.lastModified,
+    this.maxStale,
     this.priority = CachePriority.normal,
     required this.responseDate,
     required this.url,
@@ -68,20 +68,21 @@ class CacheResponse {
 
   /// Returns date in seconds since epoch or null.
   int getMaxStaleSeconds() {
-    return maxStale.millisecondsSinceEpoch ~/ 1000;
+    return maxStale != null ? maxStale!.millisecondsSinceEpoch ~/ 1000 : 0;
   }
 
   Response toResponse(RequestOptions options) {
-    final decHeaders = jsonDecode(utf8.decode(headers)) as Map<String, dynamic>;
+    final decHeaders =
+        jsonDecode(utf8.decode(headers ?? [])) as Map<String, dynamic>;
 
     final h = Headers();
     decHeaders.forEach((key, value) => h.set(key, value));
 
     return Response(
-      data: deserializeContent(options.responseType!, content),
+      data: deserializeContent(options.responseType!, content ?? []),
       extra: {cacheKey: key, fromCache: true},
       headers: h,
-      statusCode: HttpStatus.notModified,
+      statusCode: 304,
       request: options,
     );
   }

@@ -90,6 +90,6 @@ class CacheControl {
     }
 
     final maxDate = responseDate.add(Duration(seconds: maxAge));
-    return maxDate.isBefore(DateTime.now());
+    return maxDate.isBefore(DateTime.now().toUtc());
   }
 }
