@@ -38,10 +38,10 @@ class DbCacheStore extends CacheStore {
   /// By default:
   /// - On Android, data/data/package_name/databases.
   /// - On iOS, Documents directory.
-  final String databasePath;
+  final String? databasePath;
 
   // Our DB connection
-  Database _db;
+  Database? _db;
 
   DbCacheStore({this.databaseName = _tableName, this.databasePath}) {
     clean(staleOnly: true);
@@ -96,7 +96,7 @@ class DbCacheStore extends CacheStore {
   }
 
   @override
-  Future<CacheResponse> get(String key) async {
+  Future<CacheResponse?> get(String key) async {
     final db = await _getDatabase();
 
     if (db != null) {
@@ -121,21 +121,17 @@ class DbCacheStore extends CacheStore {
         cacheControl:
             CacheControl.fromHeader(result[_columnCacheControl]?.split(', ')),
         content: result[_columnContent],
-        date: result[_columnDate] != null
-            ? DateTime.tryParse(result[_columnDate])
-            : null,
+        date: DateTime.tryParse(result[_columnDate]) ?? DateTime.now(),
         eTag: result[_columnETag],
-        expires: result[_columnExpires] != null
-            ? DateTime.tryParse(result[_columnExpires])
-            : null,
+        expires: DateTime.tryParse(result[_columnExpires]) ?? DateTime.now(),
         headers: result[_columnHeaders],
         key: key,
         lastModified: result[_columnLastModified],
         maxStale: maxStale != null
             ? DateTime.fromMillisecondsSinceEpoch(maxStale * 1000, isUtc: true)
-            : null,
+            : DateTime.now(),
         priority: CachePriority.values[result[_columnPriority]],
-        responseDate: DateTime.tryParse(result[_columnResponseDate]),
+        responseDate: DateTime.parse(result[_columnResponseDate]),
         url: result[_columnUrl],
       );
     }
@@ -152,10 +148,10 @@ class DbCacheStore extends CacheStore {
         _tableName,
         {
           _columnDate: response.date.toIso8601String(),
-          _columnCacheControl: response.cacheControl?.toHeader(),
+          _columnCacheControl: response.cacheControl.toHeader(),
           _columnContent: response.content,
           _columnETag: response.eTag,
-          _columnExpires: response.expires?.toIso8601String(),
+          _columnExpires: response.expires.toIso8601String(),
           _columnHeaders: response.headers,
           _columnKey: response.key,
           _columnLastModified: response.lastModified,
@@ -178,9 +174,17 @@ class DbCacheStore extends CacheStore {
     }
   }
 
-  Future<Database> _getDatabase() async {
+  Future<String?> _tryGetDatabasesPath() async {
+    try {
+      return await getDatabasesPath();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Database?> _getDatabase() async {
     if (_db == null) {
-      final path = databasePath ?? await getDatabasesPath();
+      final path = databasePath ?? await _tryGetDatabasesPath() ?? '';
       await Directory(path).create(recursive: true);
 
       _db = await openDatabase(

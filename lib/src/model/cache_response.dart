@@ -3,7 +3,6 @@ import 'dart:io' show HttpStatus;
 
 import 'package:dio/dio.dart';
 import 'package:dio_cache_interceptor/src/model/cache_control.dart';
-import 'package:meta/meta.dart';
 
 import '../content_serialization.dart';
 import 'cache_priority.dart';
@@ -53,27 +52,23 @@ class CacheResponse {
   final String url;
 
   CacheResponse({
-    @required this.cacheControl,
-    @required this.content,
-    @required this.date,
-    @required this.eTag,
-    @required this.expires,
-    @required this.headers,
-    @required this.key,
-    @required this.lastModified,
-    @required this.maxStale,
-    @required this.priority,
-    @required this.responseDate,
-    @required this.url,
+    required this.cacheControl,
+    required this.content,
+    required this.date,
+    required this.eTag,
+    required this.expires,
+    this.headers = const [],
+    required this.key,
+    this.lastModified = '',
+    required this.maxStale,
+    this.priority = CachePriority.normal,
+    required this.responseDate,
+    required this.url,
   });
 
   /// Returns date in seconds since epoch or null.
   int getMaxStaleSeconds() {
-    if (maxStale != null) {
-      return maxStale.millisecondsSinceEpoch ~/ 1000;
-    }
-
-    return null;
+    return maxStale.millisecondsSinceEpoch ~/ 1000;
   }
 
   Response toResponse(RequestOptions options) {
@@ -83,7 +78,7 @@ class CacheResponse {
     decHeaders.forEach((key, value) => h.set(key, value));
 
     return Response(
-      data: deserializeContent(options.responseType, content),
+      data: deserializeContent(options.responseType!, content),
       extra: {cacheKey: key, fromCache: true},
       headers: h,
       statusCode: HttpStatus.notModified,
